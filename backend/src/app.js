@@ -65,6 +65,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Terjadi kesalahan internal pada server.' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 E-Arsip Backend berjalan di http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 E-Arsip Backend berjalan di http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
