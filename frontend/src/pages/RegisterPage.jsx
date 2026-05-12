@@ -53,7 +53,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[#1E3A5F]">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[#297BBF]">
       <div className="w-full animate-scaleIn max-w-[420px]">
         {/* Card */}
         <div className="bg-[#ffffff] shadow-xl rounded-[8px] p-[40px]">
