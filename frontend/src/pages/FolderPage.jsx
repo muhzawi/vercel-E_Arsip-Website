@@ -97,22 +97,22 @@ export default function FolderPage() {
         </nav>
 
         {/* Folder Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-[40px] h-[40px] bg-[#EBF4FC] rounded-[8px]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-center flex-shrink-0 w-[40px] h-[40px] bg-[#EBF4FC] rounded-[8px]">
               <FolderOpen size={22} color="#297BBF" />
             </div>
-            <div>
-              <h1 className="font-[600] text-[18px] text-[#1a1a1a]">{data.nama}</h1>
-              <p className="text-[12px] text-[#666666]">Dibuat oleh {data.pembuat?.nama}</p>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-[600] text-[18px] text-[#1a1a1a] truncate">{data.nama}</h1>
+              <p className="text-[12px] text-[#666666] truncate">Dibuat oleh {data.pembuat?.nama}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowSubfolder(true)} className="btn-secondary flex items-center gap-1.5 text-[13px]">
+          <div className="flex items-center gap-2 w-full sm:w-auto flex-shrink-0">
+            <button onClick={() => setShowSubfolder(true)} className="btn-secondary flex-1 sm:flex-none justify-center flex items-center gap-1.5 text-[13px]">
               <Plus size={14} />
               Subfolder
             </button>
-            <button onClick={() => setShowUpload(true)} className="btn-primary flex items-center gap-1.5 text-[13px]">
+            <button onClick={() => setShowUpload(true)} className="btn-primary flex-1 sm:flex-none justify-center flex items-center gap-1.5 text-[13px]">
               <Upload size={14} />
               Unggah File
             </button>
