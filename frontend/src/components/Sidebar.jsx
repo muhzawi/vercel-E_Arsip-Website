@@ -1,8 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Search, Activity, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, Search, Activity, Users, LogOut, X } from 'lucide-react';
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -33,9 +33,9 @@ export default function Sidebar() {
     }`;
 
   return (
-    <aside className="h-screen flex flex-col flex-shrink-0 w-[220px] bg-[#297BBF]">
+    <aside className="h-screen flex flex-col flex-shrink-0 w-[220px] bg-[#297BBF] shadow-xl md:shadow-none">
       {/* Header — Logo */}
-      <div className="px-4 py-4 border-b border-[#ffffff22]">
+      <div className="px-4 py-4 border-b border-[#ffffff22] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex items-center justify-center flex-shrink-0">
             <img
@@ -49,6 +49,11 @@ export default function Sidebar() {
             <p className="text-white/50 font-normal text-[10px] leading-none">Dinas Pendidikan</p>
           </div>
         </div>
+        {onClose && (
+          <button onClick={onClose} className="md:hidden text-white/70 hover:text-white p-1 rounded-md">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {/* User Info */}
@@ -75,7 +80,7 @@ export default function Sidebar() {
       {/* Menu */}
       <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
         {menuItems.map(item => (
-          <NavLink key={item.to} to={item.to} className={linkClass}>
+          <NavLink key={item.to} to={item.to} className={linkClass} onClick={onClose}>
             {({ isActive }) => (
               <>
                 <span className={isActive ? 'text-white' : 'text-white/70'}>{item.icon}</span>
@@ -89,7 +94,7 @@ export default function Sidebar() {
           <div className="mt-4">
             <p className="text-white/40 text-[10px] uppercase tracking-wider px-2.5 mb-1.5">Admin</p>
             {adminMenuItems.map(item => (
-              <NavLink key={item.to} to={item.to} className={linkClass}>
+              <NavLink key={item.to} to={item.to} className={linkClass} onClick={onClose}>
                 {({ isActive }) => (
                   <>
                     <span className={isActive ? 'text-white' : 'text-white/70'}>{item.icon}</span>
