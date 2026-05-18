@@ -13,6 +13,8 @@ export default function DashboardPage() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [renameData, setRenameData] = useState(null);
+  const [newName, setNewName] = useState('');
 
   const { data: foldersData, isLoading: foldersLoading } = useQuery({
     queryKey: ['folders'],
@@ -36,7 +38,47 @@ export default function DashboardPage() {
     onError: (err) => toast.error(err.response?.data?.message || 'Gagal membuat folder.'),
   });
 
+  const deleteFolderMut = useMutation({
+    mutationFn: (id) => api.delete(`/folders/${id}`),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['folders'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      toast.success(res.data.message || 'Folder berhasil dihapus.');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal menghapus folder.'),
+  });
+
+  const renameMut = useMutation({
+    mutationFn: ({ id, nama }) => api.put(`/folders/${id}/rename`, { nama }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['folders'] });
+      setRenameData(null);
+      setNewName('');
+      toast.success(res.data.message || 'Nama folder berhasil diubah.');
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Gagal mengubah nama folder.'),
+  });
+
   const handleCreate = (e) => { e.preventDefault(); if (folderName.trim()) createMut.mutate(folderName.trim()); };
+  
+  const handleDeleteClick = (folder) => {
+    if (window.confirm(`Hapus folder "${folder.nama}"? Pastikan folder kosong sebelum dihapus.`)) {
+      deleteFolderMut.mutate(folder.id);
+    }
+  };
+
+  const handleRenameClick = (folder) => {
+    setRenameData(folder);
+    setNewName(folder.nama);
+  };
+
+  const submitRename = (e) => {
+    e.preventDefault();
+    if (newName.trim() && renameData) {
+      renameMut.mutate({ id: renameData.id, nama: newName.trim() });
+    }
+  };
+
   const folders = foldersData || [];
   const rootFolders = folders.filter(f => !f.parent_id);
 
@@ -125,7 +167,16 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {rootFolders.map((f, index) => <FolderCard key={f.id} folder={f} index={index} />)}
+              {rootFolders.map((f, index) => (
+                <FolderCard 
+                  key={f.id} 
+                  folder={f} 
+                  index={index} 
+                  currentUser={user}
+                  onRename={handleRenameClick}
+                  onDelete={handleDeleteClick}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -152,6 +203,32 @@ export default function DashboardPage() {
               <button type="submit" disabled={createMut.isPending} className="btn-primary flex items-center gap-2">
                 {createMut.isPending && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                 Buat Folder
+              </button>
+            </div>
+          </form>
+        </Modal>
+
+        {/* Modal Ubah Nama Folder */}
+        <Modal isOpen={!!renameData} onClose={() => setRenameData(null)} title="Ubah Nama Folder">
+          <form onSubmit={submitRename} className="space-y-4">
+            <div>
+              <label className="block font-[500] text-[12px] text-[#333333] mb-1">Nama Folder Baru</label>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="input-field"
+                placeholder="Masukkan nama baru"
+                autoFocus
+                required
+              />
+            </div>
+            {renameMut.isError && <p className="text-sm text-red-500">{renameMut.error?.response?.data?.message || 'Gagal mengubah nama folder.'}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setRenameData(null)} className="btn-secondary">Batal</button>
+              <button type="submit" disabled={renameMut.isPending} className="btn-primary flex items-center gap-2">
+                {renameMut.isPending && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                Simpan Perubahan
               </button>
             </div>
           </form>

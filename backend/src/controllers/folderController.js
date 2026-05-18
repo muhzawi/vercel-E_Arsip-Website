@@ -207,6 +207,14 @@ const deleteFolder = async (req, res) => {
       });
     }
 
+    // Cek otorisasi
+    if (req.user.role !== 'admin' && folder.dibuat_oleh !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki akses untuk menghapus folder ini.',
+      });
+    }
+
     // Cek apakah ada file aktif di dalam folder
     const { data: activeFiles, error: fileError } = await supabase
       .from('files')
@@ -260,4 +268,78 @@ const deleteFolder = async (req, res) => {
   }
 };
 
-module.exports = { getAllFolders, getFolderById, createFolder, deleteFolder };
+/**
+ * Rename folder
+ * PUT /api/folders/:id/rename
+ */
+const renameFolder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nama } = req.body;
+
+    if (!nama || nama.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        message: 'Nama folder wajib diisi.',
+      });
+    }
+
+    // Cek folder ada
+    const { data: folder, error: folderError } = await supabase
+      .from('folders')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (folderError || !folder) {
+      return res.status(404).json({
+        success: false,
+        message: 'Folder tidak ditemukan.',
+      });
+    }
+
+    // Cek otorisasi
+    if (req.user.role !== 'admin' && folder.dibuat_oleh !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki akses untuk mengubah nama folder ini.',
+      });
+    }
+
+    const newName = nama.trim();
+
+    const { error: updateError } = await supabase
+      .from('folders')
+      .update({ nama: newName })
+      .eq('id', id);
+
+    if (updateError) {
+      console.error('renameFolder error:', updateError);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal mengubah nama folder.',
+      });
+    }
+
+    // Catat activity log
+    await supabase.from('activity_logs').insert({
+      user_id: req.user.id,
+      aksi: 'ubah_folder',
+      keterangan: `Mengubah nama folder dari ${folder.nama} menjadi ${newName}`,
+      ip_address: req.ip,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Nama folder berhasil diubah.',
+    });
+  } catch (error) {
+    console.error('renameFolder error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Terjadi kesalahan pada server.',
+    });
+  }
+};
+
+module.exports = { getAllFolders, getFolderById, createFolder, deleteFolder, renameFolder };
