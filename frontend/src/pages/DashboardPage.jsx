@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
@@ -7,6 +7,7 @@ import Modal from '../components/Modal';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import { Plus, Folder, FileText, CalendarDays } from 'lucide-react';
+import supabase from '../config/supabase';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -25,6 +26,31 @@ export default function DashboardPage() {
     queryKey: ['dashboard-stats'],
     queryFn: () => api.get('/stats').then(r => r.data.data),
   });
+
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+
+    // Listen to new users registration for real-time notification
+    const channel = supabase.channel('dashboard-admin-notifs')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'users' },
+        (payload) => {
+          if (payload.new && payload.new.status === 'pending') {
+            const userName = payload.new.nama || 'Seseorang';
+            toast.success(`Pendaftar Baru: ${userName} menunggu persetujuan Anda!`, {
+              duration: 5000,
+              icon: '👤',
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const createMut = useMutation({
     mutationFn: (nama) => api.post('/folders', { nama }),

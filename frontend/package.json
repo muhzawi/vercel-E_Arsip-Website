@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
     "@tanstack/react-query": "^5.51.0",
     "axios": "^1.7.4",
     "earsip-dinaspendidikan": "file:..",

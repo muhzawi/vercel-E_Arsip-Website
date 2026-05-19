@@ -48,6 +48,48 @@ const register = async (req, res) => {
         console.error('Insert public.users error:', insertError);
         // Abaikan jika misal sudah ada trigger DB yang meng-handle
       }
+
+      // KIRM WEB PUSH NOTIFICATION KE ADMIN
+      try {
+        const webpush = require('web-push');
+        webpush.setVapidDetails(
+          process.env.VAPID_SUBJECT || 'mailto:admin@dinas.go.id',
+          process.env.VAPID_PUBLIC_KEY,
+          process.env.VAPID_PRIVATE_KEY
+        );
+
+        // Ambil semua subscription dari database (biasanya milik admin)
+        const { data: subs, error: subsError } = await supabase.from('push_subscriptions').select('*');
+        
+        if (!subsError && subs && subs.length > 0) {
+          const payload = JSON.stringify({
+            title: 'Pendaftaran Pegawai Baru',
+            body: `${nama.trim()} telah mendaftar dan menunggu persetujuan Anda.`,
+            url: '/dashboard'
+          });
+
+          const sendPromises = subs.map(async (sub) => {
+            try {
+              const pushSubscription = {
+                endpoint: sub.endpoint,
+                keys: { p256dh: sub.p256dh, auth: sub.auth }
+              };
+              await webpush.sendNotification(pushSubscription, payload);
+            } catch (err) {
+              if (err.statusCode === 404 || err.statusCode === 410) {
+                // Subscription is no longer valid, delete it
+                await supabase.from('push_subscriptions').delete().eq('id', sub.id);
+              } else {
+                console.error('Error sending push notification:', err);
+              }
+            }
+          });
+          
+          await Promise.all(sendPromises);
+        }
+      } catch (pushErr) {
+        console.error('Failed to process push notifications:', pushErr);
+      }
     }
 
     return res.status(201).json({

@@ -1,10 +1,45 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Search, Activity, Users, LogOut, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import api from '../api/axios';
+import supabase from '../config/supabase';
 
 export default function Sidebar({ onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Ambil jumlah user pending saat pertama kali load
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+
+    const fetchPending = async () => {
+      try {
+        const res = await api.get('/admin/users/pending');
+        setPendingCount(res.data.data?.length || 0);
+      } catch { /* ignore */ }
+    };
+
+    fetchPending();
+
+    // Dengarkan user baru via Supabase Realtime
+    const channel = supabase.channel('sidebar-pending-notif')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'users' }, (payload) => {
+        if (payload.new?.status === 'pending') {
+          setPendingCount(prev => prev + 1);
+        }
+      })
+      // Kurangi count jika user diapprove/ditolak
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, (payload) => {
+        if (payload.old?.status === 'pending' && payload.new?.status !== 'pending') {
+          setPendingCount(prev => Math.max(0, prev - 1));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   const handleLogout = async () => {
     await logout();
@@ -22,7 +57,7 @@ export default function Sidebar({ onClose }) {
 
   const adminMenuItems = [
     { to: '/log-aktivitas', label: 'Log Aktivitas', icon: <Activity size={16} /> },
-    { to: '/pegawai', label: 'Kelola Pegawai', icon: <Users size={16} /> },
+    { to: '/pegawai', label: 'Kelola Pegawai', icon: <Users size={16} />, badge: pendingCount },
   ];
 
   const linkClass = ({ isActive }) =>
@@ -98,7 +133,12 @@ export default function Sidebar({ onClose }) {
                 {({ isActive }) => (
                   <>
                     <span className={isActive ? 'text-white' : 'text-white/70'}>{item.icon}</span>
-                    {item.label}
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge > 0 && (
+                      <span className="ml-auto bg-[#FBD206] text-black text-[10px] font-[700] px-[6px] py-[1px] rounded-full leading-none min-w-[18px] text-center">
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>
