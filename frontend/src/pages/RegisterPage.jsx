@@ -89,7 +89,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <label className="block font-[500] mb-1 text-[12px] text-[#333333]">Email</label>
-              <input id="register-email" type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} required placeholder="nama@dinas.go.id"
+              <input id="register-email" type="email" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} required placeholder="contoh@email.com"
                 className="input-field" />
             </div>
             <div>

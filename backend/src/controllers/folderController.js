@@ -233,6 +233,17 @@ const deleteFolder = async (req, res) => {
       });
     }
 
+    // Hapus permanen file yang sudah di-soft-delete (dihapus_pada IS NOT NULL) di dalam folder ini
+    // Ini wajib dilakukan untuk menghindari error Foreign Key saat menghapus folder
+    const { error: deleteFilesError } = await supabase
+      .from('files')
+      .delete()
+      .eq('folder_id', id);
+
+    if (deleteFilesError) {
+      console.error('deleteFilesError:', deleteFilesError);
+    }
+
     // Delete folder
     const { error: deleteError } = await supabase
       .from('folders')

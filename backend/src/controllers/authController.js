@@ -17,12 +17,13 @@ const register = async (req, res) => {
     }
 
     // Register via Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Untuk pendaftaran baru, kita gunakan Admin API agar Supabase tidak otomatis mengirim email verifikasi
+    // Email verifikasi HANYA akan dikirim setelah Admin menyetujui akun ini.
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: email.toLowerCase().trim(),
       password,
-      options: {
-        data: { full_name: nama.trim() }
-      }
+      email_confirm: false, // Jangan kirim email / langsung konfirmasi
+      user_metadata: { full_name: nama.trim() }
     });
 
     if (authError) {
@@ -79,6 +80,7 @@ const login = async (req, res) => {
       .single();
 
     if (profileError || !userProfile) {
+      console.log('Login failed: Profile not found or error', profileError);
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }
 
@@ -98,13 +100,20 @@ const login = async (req, res) => {
       });
     }
 
-    // 2. Verifikasi password lewat Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    // 2. Verifikasi password menggunakan instance Supabase terisolasi 
+    // Mencegah "state pollution" pada Node.js singleton jika ada multiple request
+    const { createClient } = require('@supabase/supabase-js');
+    const authClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+
+    const { data: authData, error: authError } = await authClient.auth.signInWithPassword({
       email: email.toLowerCase().trim(),
       password,
     });
 
     if (authError || !authData.session) {
+      console.log('Login failed: Supabase Auth error', authError);
       if (authError && authError.message.includes('Email not confirmed')) {
          return res.status(403).json({ success: false, message: 'Email belum diverifikasi. Silakan cek kotak masuk Anda.' });
       }

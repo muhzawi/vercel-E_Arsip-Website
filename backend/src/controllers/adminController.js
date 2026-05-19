@@ -291,11 +291,20 @@ const deleteUser = async (req, res) => {
     const { data: user, error: findErr } = await supabase.from('users').select('id, nama, email, role').eq('id', id).single();
     if (findErr || !user) return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
 
+    // Cek apakah user membuat folder
+    const { count: folderCount, error: folderErr } = await supabase.from('folders').select('id', { count: 'exact', head: true }).eq('dibuat_oleh', id);
+    if (folderCount > 0) {
+      return res.status(400).json({ success: false, message: `Tidak bisa menghapus ${user.nama} karena masih membuat/memiliki ${folderCount} folder.` });
+    }
+
     // Cek apakah user punya file yang masih aktif
     const { count: fileCount } = await supabase.from('files').select('id', { count: 'exact', head: true }).eq('diunggah_oleh', id).is('dihapus_pada', null);
     if (fileCount > 0) {
       return res.status(400).json({ success: false, message: `Tidak bisa menghapus ${user.nama} karena masih memiliki ${fileCount} file aktif.` });
     }
+
+    // Hapus permanen file soft-delete milik user ini agar tidak melanggar foreign key
+    await supabase.from('files').delete().eq('diunggah_oleh', id);
 
     // Hapus activity logs dulu (foreign key constraint)
     await supabase.from('activity_logs').delete().eq('user_id', id);
@@ -308,7 +317,10 @@ const deleteUser = async (req, res) => {
     }
 
     const { error: deleteErr } = await supabase.from('users').delete().eq('id', id);
-    if (deleteErr) return res.status(500).json({ success: false, message: 'Gagal menghapus user.' });
+    if (deleteErr) {
+      console.error('deleteUser error:', deleteErr);
+      return res.status(500).json({ success: false, message: 'Gagal menghapus profil user.' });
+    }
 
     await supabase.from('activity_logs').insert({
       user_id: req.user.id,
