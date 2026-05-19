@@ -7,18 +7,16 @@ const supabase = require('../config/supabase');
  */
 const getAllUsers = async (req, res) => {
   try {
-    // Boolean schema: TRUE = approved, FALSE = pending/inactive
+    // TEXT schema: 'approved', 'inactive', 'pending'
     const { data, error } = await supabase
       .from('users')
-      .select('id, nama, email, role, status, created_at, updated_at')
-      .eq('status', true)
+      .select('id, nama, email, role, status, email_verified, created_at, updated_at')
+      .neq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ success: false, message: 'Gagal mengambil data user.' });
 
-    // Normalisasi status untuk respons frontend
-    const normalized = (data || []).map(u => ({ ...u, status: u.status === true ? 'approved' : u.status === false ? 'pending' : u.status }));
-    return res.status(200).json({ success: true, data: normalized });
+    return res.status(200).json({ success: true, data: data || [] });
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
   }
@@ -30,18 +28,16 @@ const getAllUsers = async (req, res) => {
  */
 const getPendingUsers = async (req, res) => {
   try {
-    // Boolean schema: FALSE = belum disetujui (pending)
+    // TEXT schema
     const { data, error } = await supabase
       .from('users')
-      .select('id, nama, email, role, status, created_at')
-      .eq('status', false)
+      .select('id, nama, email, role, status, email_verified, created_at')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) return res.status(500).json({ success: false, message: 'Gagal mengambil data pending user.' });
 
-    // Normalisasi status untuk respons frontend
-    const normalized = (data || []).map(u => ({ ...u, status: 'pending' }));
-    return res.status(200).json({ success: true, data: normalized });
+    return res.status(200).json({ success: true, data: data || [] });
   } catch (e) {
     return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
   }
@@ -63,15 +59,26 @@ const approveUser = async (req, res) => {
 
     if (findErr || !user) return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
 
-    // Boolean schema: FALSE = pending
-    if (user.status !== false) {
+    // TEXT schema
+    if (user.status !== 'pending') {
       return res.status(400).json({ success: false, message: 'User ini bukan dalam status pending.' });
     }
 
     const { error: updateErr } = await supabase
       .from('users')
-      .update({ status: true, updated_at: new Date().toISOString() })
+      .update({ status: 'approved', updated_at: new Date().toISOString() })
       .eq('id', id);
+
+    // Kirim email verifikasi via Supabase Auth
+    const redirectUrl = process.env.FRONTEND_URL 
+      ? `${process.env.FRONTEND_URL}/verify`
+      : 'http://localhost:5173/verify';
+
+    await supabase.auth.resend({
+      type: 'signup',
+      email: user.email,
+      options: { emailRedirectTo: redirectUrl }
+    });
 
     if (updateErr) return res.status(500).json({ success: false, message: 'Gagal menyetujui user.' });
 
@@ -103,10 +110,25 @@ const createUser = async (req, res) => {
     const { data: existing } = await supabase.from('users').select('id').eq('email', email.toLowerCase().trim()).single();
     if (existing) return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
 
-    const password_hash = await bcrypt.hash(password, 12);
+    // Untuk createUser oleh admin, kita gunakan Supabase Auth juga
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password,
+      options: { data: { full_name: nama.trim() } }
+    });
+
+    if (authError) return res.status(400).json({ success: false, message: authError.message });
+
     const { data: newUser, error } = await supabase
       .from('users')
-      .insert({ nama: nama.trim(), email: email.toLowerCase().trim(), password_hash, role: role || 'pegawai', status: true })
+      .insert({ 
+        id: authData.user.id,
+        nama: nama.trim(), 
+        email: email.toLowerCase().trim(), 
+        role: role || 'pegawai', 
+        status: 'approved',
+        email_verified: false
+      })
       .select('id, nama, email, role, status, created_at')
       .single();
 
@@ -119,8 +141,7 @@ const createUser = async (req, res) => {
       ip_address: req.ip,
     });
 
-    const normalized = { ...newUser, status: newUser.status === true ? 'approved' : 'pending' };
-    return res.status(201).json({ success: true, data: normalized, message: 'Pegawai berhasil ditambahkan.' });
+    return res.status(201).json({ success: true, data: newUser, message: 'Pegawai berhasil ditambahkan. Email verifikasi telah dikirim.' });
   } catch (e) {
     console.error('createUser error:', e);
     return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
@@ -141,13 +162,12 @@ const toggleUserStatus = async (req, res) => {
     const { data: user, error } = await supabase.from('users').select('id, nama, status').eq('id', id).single();
     if (error || !user) return res.status(404).json({ success: false, message: 'User tidak ditemukan.' });
 
-    // Boolean schema: toggle TRUE ↔ FALSE
-    const newStatusBool = !user.status;
-    const newStatusStr  = newStatusBool ? 'approved' : 'inactive';
+    // TEXT schema: toggle 'approved' ↔ 'inactive'
+    const newStatusStr = user.status === 'approved' ? 'inactive' : 'approved';
 
     const { error: ue } = await supabase
       .from('users')
-      .update({ status: newStatusBool, updated_at: new Date().toISOString() })
+      .update({ status: newStatusStr, updated_at: new Date().toISOString() })
       .eq('id', id);
 
     if (ue) return res.status(500).json({ success: false, message: 'Gagal mengubah status.' });
@@ -161,7 +181,7 @@ const toggleUserStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Akun ${user.nama} berhasil ${newStatusBool ? 'diaktifkan' : 'dinonaktifkan'}.`,
+      message: `Akun ${user.nama} berhasil diubah menjadi ${newStatusStr}.`,
       data: { id, status: newStatusStr },
     });
   } catch (e) {
@@ -231,9 +251,12 @@ const updateUser = async (req, res) => {
     if (nama) updates.nama = nama.trim();
     if (email) updates.email = email.toLowerCase().trim();
     if (role) updates.role = role;
+    // Update password via admin auth api
     if (password) {
       if (password.length < 6) return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
-      updates.password_hash = await bcrypt.hash(password, 12);
+      
+      const { error: authUpdateErr } = await supabase.auth.admin.updateUserById(id, { password });
+      if (authUpdateErr) return res.status(500).json({ success: false, message: 'Gagal mengupdate password.' });
     }
 
     const { data: updated, error: updateErr } = await supabase.from('users').update(updates).eq('id', id).select('id, nama, email, role, status, created_at').single();
@@ -276,6 +299,13 @@ const deleteUser = async (req, res) => {
 
     // Hapus activity logs dulu (foreign key constraint)
     await supabase.from('activity_logs').delete().eq('user_id', id);
+
+    // Hapus dari public.users (Jika ada trigger akan dihapus dari auth.users, tapi untuk amannya hapus auth.users)
+    const { error: deleteAuthErr } = await supabase.auth.admin.deleteUser(id);
+    if (deleteAuthErr) {
+       console.error('deleteAuthErr', deleteAuthErr);
+       // continue to try deleting public profile if auth user deletion fails (it cascades usually)
+    }
 
     const { error: deleteErr } = await supabase.from('users').delete().eq('id', id);
     if (deleteErr) return res.status(500).json({ success: false, message: 'Gagal menghapus user.' });

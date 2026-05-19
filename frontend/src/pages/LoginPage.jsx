@@ -80,6 +80,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col items-center gap-3">
+            <Link to="/forgot-password" className="text-[12px] text-[#297BBF] hover:underline">Lupa Password?</Link>
             <p className="text-center text-[13px] text-[#666666]">
               Belum punya akun?{' '}
               <Link to="/register" className="font-[500] text-[#297BBF] hover:text-[#1a6aad] hover:underline transition-colors duration-300">Daftar di sini</Link>

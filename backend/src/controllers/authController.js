@@ -1,5 +1,3 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
 
 /**
@@ -18,40 +16,42 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
     }
 
-    // Cek apakah email sudah terdaftar
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email.toLowerCase().trim())
-      .single();
+    // Register via Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password,
+      options: {
+        data: { full_name: nama.trim() }
+      }
+    });
 
-    if (existing) {
-      return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
+    if (authError) {
+      console.error('Supabase Auth error:', authError);
+      return res.status(400).json({ success: false, message: authError.message });
     }
 
-    const password_hash = await bcrypt.hash(password, 12);
+    // Coba insert ke public.users (Profile)
+    if (authData.user) {
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          nama: nama.trim(),
+          email: email.toLowerCase().trim(),
+          role: 'pegawai',
+          status: 'pending',
+          email_verified: false
+        });
 
-    const { data: newUser, error } = await supabase
-      .from('users')
-      .insert({
-        nama: nama.trim(),
-        email: email.toLowerCase().trim(),
-        password_hash,
-        role: 'pegawai',
-        status: false,  // BOOLEAN false = menunggu persetujuan admin
-      })
-      .select('id, nama, email, role, status')
-      .single();
-
-    if (error) {
-      console.error('Register insert error:', error);
-      return res.status(500).json({ success: false, message: 'Gagal membuat akun.' });
+      if (insertError) {
+        console.error('Insert public.users error:', insertError);
+        // Abaikan jika misal sudah ada trigger DB yang meng-handle
+      }
     }
 
     return res.status(201).json({
       success: true,
       message: 'Pendaftaran berhasil. Akun Anda sedang menunggu persetujuan dari admin.',
-      data: { id: newUser.id, nama: newUser.nama, email: newUser.email },
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -71,23 +71,18 @@ const login = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email dan password wajib diisi.' });
     }
 
-    // Cari user berdasarkan email
-    const { data: user, error } = await supabase
+    // 1. Cek status di tabel users public
+    const { data: userProfile, error: profileError } = await supabase
       .from('users')
-      .select('*')
+      .select('id, nama, email, role, status, email_verified')
       .eq('email', email.toLowerCase().trim())
       .single();
 
-    if (error || !user) {
+    if (profileError || !userProfile) {
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }
 
-    // Normalisasi status — handle boolean (schema lama) dan string (schema baru)
-    const status = user.status === true  ? 'approved'
-                 : user.status === false ? 'pending'
-                 : String(user.status);
-
-    if (status === 'pending') {
+    if (userProfile.status === 'pending') {
       return res.status(403).json({
         success: false,
         message: 'Akun Anda sedang menunggu persetujuan admin. Silakan hubungi administrator.',
@@ -95,7 +90,7 @@ const login = async (req, res) => {
       });
     }
 
-    if (status === 'inactive') {
+    if (userProfile.status === 'inactive') {
       return res.status(403).json({
         success: false,
         message: 'Akun Anda telah dinonaktifkan. Hubungi administrator.',
@@ -103,37 +98,43 @@ const login = async (req, res) => {
       });
     }
 
-    if (status !== 'approved') {
-      return res.status(403).json({ success: false, message: 'Akun tidak dapat digunakan.' });
-    }
+    // 2. Verifikasi password lewat Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password,
+    });
 
-    // Verifikasi password
-    const isMatch = await bcrypt.compare(password, user.password_hash);
-    if (!isMatch) {
+    if (authError || !authData.session) {
+      if (authError && authError.message.includes('Email not confirmed')) {
+         return res.status(403).json({ success: false, message: 'Email belum diverifikasi. Silakan cek kotak masuk Anda.' });
+      }
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }
 
-
-    // Buat JWT token
-    const token = jwt.sign(
-      { id: user.id, nama: user.nama, email: user.email, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-    );
+    // Update email_verified jika ternyata sudah diverifikasi (antisipasi jika lewat link langsung)
+    if (!userProfile.email_verified && authData.user.email_confirmed_at) {
+      await supabase.from('users').update({ email_verified: true, status: 'approved' }).eq('id', userProfile.id);
+    }
 
     // Catat activity log
     await supabase.from('activity_logs').insert({
-      user_id: user.id,
+      user_id: userProfile.id,
       aksi: 'login',
-      keterangan: `${user.nama} berhasil login`,
+      keterangan: `${userProfile.nama} berhasil login`,
       ip_address: req.ip,
     });
 
     return res.status(200).json({
       success: true,
       data: {
-        token,
-        user: { id: user.id, nama: user.nama, email: user.email, role: user.role },
+        token: authData.session.access_token,
+        session: authData.session,
+        user: { 
+          id: userProfile.id, 
+          nama: userProfile.nama, 
+          email: userProfile.email, 
+          role: userProfile.role 
+        },
       },
       message: 'Login berhasil.',
     });
@@ -168,6 +169,14 @@ const logout = async (req, res) => {
       keterangan: `${req.user.nama} logout`,
       ip_address: req.ip,
     });
+    
+    // Kita juga bisa pass access token dan memanggil auth.signOut() 
+    // jika kita menyimpan instance supabase untuk masing-masing request
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      await supabase.auth.admin?.signOut(token).catch(() => {});
+    }
+
     return res.status(200).json({ success: true, message: 'Logout berhasil.' });
   } catch (error) {
     console.error('Logout error:', error);
@@ -175,4 +184,72 @@ const logout = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, logout };
+/**
+ * Forgot Password
+ * POST /api/auth/forgot-password
+ */
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Email wajib diisi.' });
+
+    const redirectUrl = process.env.FRONTEND_URL 
+      ? `${process.env.FRONTEND_URL}/reset-password`
+      : 'http://localhost:5173/reset-password';
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
+      redirectTo: redirectUrl,
+    });
+
+    if (error) {
+      console.error('Forgot password error:', error);
+      return res.status(400).json({ success: false, message: error.message });
+    }
+
+    return res.status(200).json({ success: true, message: 'Jika email terdaftar, instruksi reset akan dikirim.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+  }
+};
+
+/**
+ * Reset Password
+ * POST /api/auth/reset-password
+ */
+const resetPassword = async (req, res) => {
+  try {
+    const { new_password } = req.body;
+    
+    if (!new_password || new_password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password minimal 6 karakter.' });
+    }
+
+    // Catatan: frontend harus mengirim access token dari hash URL
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, message: 'Token reset tidak ditemukan atau kadaluarsa.' });
+
+    // Set session di supabase client secara temporary
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+       return res.status(401).json({ success: false, message: 'Sesi reset password tidak valid.' });
+    }
+
+    // Menggunakan API admin untuk update password (butuh service role)
+    // Jika auth anon key, update password harus di frontend: await supabase.auth.updateUser({ password })
+    // Kita akan kembalikan error dan meminta frontend melakukannya, atau kita asumsikan backend ini dipanggil
+    // menggunakan token user, tapi supabase-js di backend bersifat global singleton. 
+    // Jadi lebih aman ini di-handle 100% oleh frontend. Kita simpan endpoint ini sebagai API passthrough.
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Untuk keamanan, reset password harus dilakukan langsung melalui client-side Supabase Auth.' 
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+  }
+};
+
+module.exports = { register, login, getMe, logout, forgotPassword, resetPassword };

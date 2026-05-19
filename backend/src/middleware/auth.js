@@ -1,4 +1,3 @@
-const jwt = require('jsonwebtoken');
 const supabase = require('../config/supabase');
 
 const auth = async (req, res, next) => {
@@ -14,44 +13,38 @@ const auth = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
+    // Validasi token via Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !authData.user) {
       return res.status(401).json({
         success: false,
         message: 'Token tidak valid atau sudah kadaluarsa.',
       });
     }
 
-    // Query user dari database untuk pastikan masih ada dan aktif
-    const { data: user, error } = await supabase
+    // Query user profile dari database untuk mendapatkan role dan status
+    const { data: userProfile, error } = await supabase
       .from('users')
-      .select('id, nama, email, role, status, created_at')
-      .eq('id', decoded.id)
+      .select('id, nama, email, role, status, email_verified, created_at')
+      .eq('id', authData.user.id)
       .single();
 
-    if (error || !user) {
+    if (error || !userProfile) {
       return res.status(401).json({
         success: false,
-        message: 'User tidak ditemukan.',
+        message: 'User tidak ditemukan di sistem.',
       });
     }
 
-    // Normalisasi status — handle boolean (schema lama) dan string (schema baru)
-    const status = user.status === true  ? 'approved'
-                 : user.status === false ? 'pending'
-                 : String(user.status);
-
-    if (status !== 'approved') {
-      const msg = status === 'pending'
+    if (userProfile.status !== 'approved') {
+      const msg = userProfile.status === 'pending'
         ? 'Akun Anda sedang menunggu persetujuan admin.'
         : 'Akun Anda telah dinonaktifkan. Hubungi administrator.';
       return res.status(403).json({ success: false, message: msg });
     }
 
-
-    req.user = user;
+    req.user = userProfile;
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
