@@ -62,10 +62,11 @@ const register = async (req, res) => {
         const { data: subs, error: subsError } = await supabase.from('push_subscriptions').select('*');
         
         if (!subsError && subs && subs.length > 0) {
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
           const payload = JSON.stringify({
             title: 'Pendaftaran Pegawai Baru',
             body: `${nama.trim()} telah mendaftar dan menunggu persetujuan Anda.`,
-            url: '/dashboard'
+            url: `${frontendUrl}/dashboard`
           });
 
           const sendPromises = subs.map(async (sub) => {
