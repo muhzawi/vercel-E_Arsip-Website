@@ -25,7 +25,7 @@ export default function RegisterPage() {
             </div>
             <h2 className="font-[600] mb-3 text-[20px] text-[#1a1a1a]">Pendaftaran Berhasil!</h2>
             <p className="text-[13px] text-[#666666] leading-relaxed">
-              Akun Anda telah berhasil didaftarkan. Silakan tunggu persetujuan dari <span className="font-[600] text-[#297BBF]">administrator</span>. Setelah disetujui, Anda akan menerima email verifikasi sebelum bisa login.
+              Akun Anda telah berhasil didaftarkan. Silakan tunggu persetujuan dari <span className="font-[600] text-[#297BBF]">administrator</span>. Setelah disetujui, Anda dapat langsung login menggunakan email dan password yang telah didaftarkan.
             </p>
             <Link to="/login" className="font-[500] text-[#297BBF] hover:text-[#1a6aad] hover:underline transition-colors duration-300">← Kembali ke halaman login</Link>
           </div>

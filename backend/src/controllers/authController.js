@@ -157,16 +157,10 @@ const login = async (req, res) => {
 
     if (authError || !authData.session) {
       console.log('Login failed: Supabase Auth error', authError);
-      if (authError && authError.message.includes('Email not confirmed')) {
-         return res.status(403).json({ success: false, message: 'Email belum diverifikasi. Silakan cek kotak masuk Anda.' });
-      }
       return res.status(401).json({ success: false, message: 'Email atau password salah.' });
     }
 
-    // Update email_verified jika ternyata sudah diverifikasi (antisipasi jika lewat link langsung)
-    if (!userProfile.email_verified && authData.user.email_confirmed_at) {
-      await supabase.from('users').update({ email_verified: true, status: 'approved' }).eq('id', userProfile.id);
-    }
+    // email_verified tidak lagi digunakan sebagai syarat login — persetujuan admin sudah cukup
 
     // Catat activity log
     await supabase.from('activity_logs').insert({

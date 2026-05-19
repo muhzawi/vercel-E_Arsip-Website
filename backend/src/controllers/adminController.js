@@ -71,27 +71,17 @@ const approveUser = async (req, res) => {
 
     if (updateErr) return res.status(500).json({ success: false, message: 'Gagal menyetujui user.' });
 
-    // 2. Kirim email verifikasi via admin.generateLink()
-    //    Ini cara paling reliable karena tidak bergantung pada instance client atau sesi signup
+    // Konfirmasi email di Supabase Auth agar user bisa login tanpa klik link verifikasi
+    // (email_confirm: true berarti Supabase menganggap email sudah terverifikasi)
     try {
-      const redirectUrl = process.env.FRONTEND_URL
-        ? `${process.env.FRONTEND_URL}/verify`
-        : 'http://localhost:5173/verify';
-
-      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-        type: 'signup',
-        email: user.email,
-        options: { redirectTo: redirectUrl }
+      const { error: confirmErr } = await supabase.auth.admin.updateUserById(id, {
+        email_confirm: true
       });
-
-      if (linkErr) {
-        // Jangan gagalkan seluruh approval hanya karena email gagal
-        console.error('Gagal generate verification link:', linkErr.message);
-      } else {
-        console.log(`Email verifikasi berhasil dikirim ke ${user.email}`);
+      if (confirmErr) {
+        console.error('Gagal konfirmasi email di Supabase Auth:', confirmErr.message);
       }
-    } catch (emailErr) {
-      console.error('Email verification error (non-fatal):', emailErr);
+    } catch (confirmEx) {
+      console.error('Konfirmasi email error (non-fatal):', confirmEx);
     }
 
     await supabase.from('activity_logs').insert({
@@ -101,7 +91,7 @@ const approveUser = async (req, res) => {
       ip_address: req.ip,
     });
 
-    return res.status(200).json({ success: true, message: `Akun ${user.nama} berhasil disetujui. Email verifikasi telah dikirim.` });
+    return res.status(200).json({ success: true, message: `Akun ${user.nama} berhasil disetujui. Akun dapat langsung digunakan untuk login.` });
   } catch (e) {
     console.error('approveUser error:', e);
     return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
@@ -122,11 +112,12 @@ const createUser = async (req, res) => {
     const { data: existing } = await supabase.from('users').select('id').eq('email', email.toLowerCase().trim()).single();
     if (existing) return res.status(409).json({ success: false, message: 'Email sudah terdaftar.' });
 
-    // Untuk createUser oleh admin, kita gunakan Supabase Auth juga
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Gunakan admin.createUser agar user langsung bisa login tanpa email verifikasi
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: email.toLowerCase().trim(),
       password,
-      options: { data: { full_name: nama.trim() } }
+      email_confirm: true, // Langsung konfirmasi email — admin yang buat, tidak perlu verifikasi
+      user_metadata: { full_name: nama.trim() }
     });
 
     if (authError) return res.status(400).json({ success: false, message: authError.message });
