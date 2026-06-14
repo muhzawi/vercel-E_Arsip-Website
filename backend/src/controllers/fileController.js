@@ -2,31 +2,71 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const supabase = require('../config/supabase');
 
-const uploadFile = async (req, res) => {
+// Step 1: Generate a signed URL for frontend to upload directly to Supabase
+const getSignedUploadUrl = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ success: false, message: 'File wajib diunggah.' });
-    const { folder_id } = req.body;
-    if (!folder_id) return res.status(400).json({ success: false, message: 'folder_id wajib diisi.' });
+    const { folder_id, nama_asli, tipe_mime, ukuran_bytes } = req.body;
+    if (!folder_id || !nama_asli || !ukuran_bytes) {
+      return res.status(400).json({ success: false, message: 'Data file tidak lengkap.' });
+    }
+    if (tipe_mime !== 'application/pdf') {
+      return res.status(400).json({ success: false, message: 'Hanya file PDF yang diizinkan.' });
+    }
+    if (Number(ukuran_bytes) > 10 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'Ukuran file maksimal 10 MB.' });
+    }
 
     const { data: folder, error: fe } = await supabase.from('folders').select('id, nama').eq('id', folder_id).single();
     if (fe || !folder) return res.status(404).json({ success: false, message: 'Folder tidak ditemukan.' });
 
-    const ext = path.extname(req.file.originalname);
+    const ext = path.extname(nama_asli) || '.pdf';
     const uid = uuidv4();
     const storagePath = `${folder_id}/${uid}${ext}`;
 
-    const { error: ue } = await supabase.storage.from('arsip-dokumen').upload(storagePath, req.file.buffer, { contentType: req.file.mimetype, upsert: false });
-    if (ue) return res.status(500).json({ success: false, message: 'Gagal mengunggah file ke storage.' });
+    const { data: signedData, error: se } = await supabase.storage
+      .from('arsip-dokumen')
+      .createSignedUploadUrl(storagePath);
+
+    if (se) return res.status(500).json({ success: false, message: 'Gagal membuat URL upload.' });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        signedUrl: signedData.signedUrl,
+        token: signedData.token,
+        path: storagePath,
+        nama_file: `${uid}${ext}`,
+      }
+    });
+  } catch (error) {
+    console.error('getSignedUploadUrl error:', error);
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' });
+  }
+};
+
+const saveFileMetadata = async (req, res) => {
+  try {
+    const { folder_id, path_penyimpanan, nama_file, nama_asli, tipe_mime, ukuran_bytes } = req.body;
+    if (!folder_id || !path_penyimpanan || !nama_file || !nama_asli || !ukuran_bytes) {
+      return res.status(400).json({ success: false, message: 'Metadata file tidak lengkap.' });
+    }
+
+    const { data: folder, error: fe } = await supabase.from('folders').select('id, nama').eq('id', folder_id).single();
+    if (fe || !folder) return res.status(404).json({ success: false, message: 'Folder tidak ditemukan.' });
 
     const { data: newFile, error: de } = await supabase.from('files').insert({
-      nama_file: `${uid}${ext}`, nama_asli: req.file.originalname, tipe_mime: req.file.mimetype,
-      ukuran_bytes: req.file.size, path_penyimpanan: storagePath, folder_id, diunggah_oleh: req.user.id,
+      nama_file, nama_asli, tipe_mime, ukuran_bytes, path_penyimpanan, folder_id, diunggah_oleh: req.user.id,
     }).select('*, pengunggah:users!diunggah_oleh(id,nama,email)').single();
+    
     if (de) return res.status(500).json({ success: false, message: 'Gagal menyimpan metadata.' });
 
-    await supabase.from('activity_logs').insert({ user_id: req.user.id, aksi: 'upload_file', file_id: newFile.id, keterangan: `Upload file ${req.file.originalname} ke folder ${folder.nama}`, ip_address: req.ip });
+    await supabase.from('activity_logs').insert({ user_id: req.user.id, aksi: 'upload_file', file_id: newFile.id, keterangan: `Upload file ${nama_asli} ke folder ${folder.nama}`, ip_address: req.ip });
+    
     return res.status(201).json({ success: true, data: newFile, message: 'File berhasil diunggah.' });
-  } catch (error) { console.error('uploadFile error:', error); return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' }); }
+  } catch (error) { 
+    console.error('saveFileMetadata error:', error); 
+    return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' }); 
+  }
 };
 
 const downloadFile = async (req, res) => {
@@ -73,4 +113,4 @@ const searchFiles = async (req, res) => {
   } catch (error) { console.error('searchFiles error:', error); return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' }); }
 };
 
-module.exports = { uploadFile, downloadFile, deleteFile, searchFiles };
+module.exports = { getSignedUploadUrl, saveFileMetadata, downloadFile, deleteFile, searchFiles };

@@ -7,6 +7,7 @@ import FileCard from '../components/FileCard';
 import Modal from '../components/Modal';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
+import supabase from '../config/supabase';
 import { useAuth } from '../context/AuthContext';
 import { FolderOpen, ChevronRight, Plus, Upload, File, Edit, Trash2 } from 'lucide-react';
 
@@ -27,14 +28,48 @@ export default function FolderPage() {
   });
 
   const uploadMut = useMutation({
-    mutationFn: (formData) => api.post('/files/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    mutationFn: async (fileToUpload) => {
+      // 1. Get signed upload URL from backend
+      const urlRes = await api.post('/files/upload-url', {
+        folder_id: id,
+        nama_asli: fileToUpload.name,
+        tipe_mime: fileToUpload.type,
+        ukuran_bytes: fileToUpload.size
+      });
+
+      const { signedUrl, token, path, nama_file } = urlRes.data.data;
+
+      // 2. Upload to Supabase Storage directly using the signed URL token
+      const { error: uploadError } = await supabase.storage
+        .from('arsip-dokumen')
+        .uploadToSignedUrl(path, token, fileToUpload, {
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || 'Gagal mengunggah file ke storage.');
+      }
+
+      // 3. Send metadata to backend to save to database
+      const metadata = {
+        folder_id: id,
+        path_penyimpanan: path,
+        nama_file: nama_file,
+        nama_asli: fileToUpload.name,
+        tipe_mime: fileToUpload.type,
+        ukuran_bytes: fileToUpload.size
+      };
+
+      const res = await api.post('/files/upload', metadata);
+      return res.data;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['folder', id] });
       setShowUpload(false);
       setFile(null);
       toast.success('File berhasil diunggah.');
     },
-    onError: (err) => toast.error(err.response?.data?.message || 'Gagal mengunggah file.'),
+    onError: (err) => toast.error(err.response?.data?.message || err.message || 'Gagal mengunggah file.'),
   });
 
   const subfolderMut = useMutation({
@@ -83,10 +118,7 @@ export default function FolderPage() {
   const handleUpload = (e) => {
     e.preventDefault();
     if (!file) return;
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('folder_id', id);
-    uploadMut.mutate(fd);
+    uploadMut.mutate(file);
   };
 
   const handleDeleteFile = (f) => {
