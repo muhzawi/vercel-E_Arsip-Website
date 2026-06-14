@@ -218,7 +218,27 @@ export default function FolderPage() {
             <div>
               <label className="block font-[500] mb-2 text-[12px] text-[#333333]">Pilih File</label>
               <div className="border-2 border-dashed border-[#E0E0E0] rounded-[8px] p-6 text-center transition-colors">
-                <input type="file" onChange={(e) => setFile(e.target.files[0])} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium" style={{ '--tw-file-bg': '#EBF4FC', '--tw-file-text': '#297BBF' }} />
+                <input type="file" accept="application/pdf" onChange={(e) => {
+                  const selectedFile = e.target.files[0];
+                  if (selectedFile) {
+                    if (selectedFile.type !== 'application/pdf') {
+                      toast.error('Hanya file PDF yang diizinkan.');
+                      e.target.value = '';
+                      setFile(null);
+                      return;
+                    }
+                    if (selectedFile.size > 10 * 1024 * 1024) {
+                      toast.error('Ukuran file maksimal 10 MB.');
+                      e.target.value = '';
+                      setFile(null);
+                      return;
+                    }
+                    setFile(selectedFile);
+                  } else {
+                    setFile(null);
+                  }
+                }} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium" style={{ '--tw-file-bg': '#EBF4FC', '--tw-file-text': '#297BBF' }} />
+                <p className="mt-3 text-[11px] text-[#888888]">Hanya mendukung file format PDF dengan ukuran maksimal 10 MB</p>
               </div>
               {file && <p className="text-[12px] mt-2 text-[#666666]">📎 {file.name} ({(file.size / 1024).toFixed(1)} KB)</p>}
             </div>

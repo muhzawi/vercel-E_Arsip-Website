@@ -35,7 +35,6 @@ export default function ActivityLogPage() {
     queryFn: () => api.get(`/admin/logs?${buildParams()}`).then(r => r.data.data),
   });
 
-  const resetFilters = () => { setFilters({ aksi: '', dari: '', sampai: '' }); setPage(1); };
 
   return (
     <Layout>
@@ -58,7 +57,6 @@ export default function ActivityLogPage() {
           <div>
             <input type="date" value={filters.sampai} onChange={(e) => { setFilters(f => ({ ...f, sampai: e.target.value })); setPage(1); }} className="input-field text-[13px] py-2" />
           </div>
-          <button onClick={resetFilters} className="btn-secondary text-[13px] py-2">Reset</button>
         </div>
 
         {/* Table */}
