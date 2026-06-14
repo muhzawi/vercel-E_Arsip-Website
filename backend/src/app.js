@@ -8,7 +8,7 @@ const fileRoutes = require('./routes/fileRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const statsRoutes = require('./routes/statsRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
-
+const cronRoutes = require('./routes/cronRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -43,7 +43,7 @@ app.use('/api/files', fileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/notifications', notificationRoutes);
-
+app.use('/api/cron', cronRoutes);
 // Root & health check
 app.get('/', (req, res) => {
   res.json({ success: true, message: 'E-Arsip Backend API', version: '1.0.0', docs: '/api/health' });
