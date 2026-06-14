@@ -55,6 +55,9 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'E-Arsip API berjalan.', timestamp: new Date().toISOString() });
 });
 
+// Ignore favicon requests to prevent 404 logs
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+
 // 404 handler — harus sebelum error handler
 app.use((req, res) => {
   console.warn(`[404] ${req.method} ${req.originalUrl} — tidak ditemukan`);
