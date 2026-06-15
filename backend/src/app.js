@@ -12,6 +12,9 @@ const cronRoutes = require('./routes/cronRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Inisialisasi internal cron jobs
+require('./services/cronService');
+
 // Middleware
 const allowedOrigins = [
   'http://localhost:5173',
