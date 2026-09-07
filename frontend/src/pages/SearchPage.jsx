@@ -7,6 +7,8 @@ import { Search, FileX, Download, File } from 'lucide-react';
 export default function SearchPage() {
   const [keyword, setKeyword] = useState('');
   const [debouncedKw, setDebouncedKw] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedKw(keyword), 400);
@@ -14,9 +16,15 @@ export default function SearchPage() {
   }, [keyword]);
 
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['search', debouncedKw],
-    queryFn: () => api.get(`/files/search?q=${encodeURIComponent(debouncedKw)}`).then(r => r.data.data),
-    enabled: debouncedKw.length > 0,
+    queryKey: ['search', debouncedKw, dateFrom, dateTo],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (debouncedKw) params.set('q', debouncedKw);
+      if (dateFrom) params.set('dari', dateFrom);
+      if (dateTo) params.set('sampai', dateTo);
+      return api.get(`/files/search?${params.toString()}`).then(r => r.data.data);
+    },
+    enabled: Boolean(debouncedKw || dateFrom || dateTo),
   });
 
   const handleDownload = async (file) => {
@@ -39,8 +47,8 @@ export default function SearchPage() {
           <h1 className="font-[600] text-[18px] text-[#1a1a1a]">Cari Dokumen</h1>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative mb-6">
+        {/* Search filters */}
+        <div className="relative mb-6 space-y-3">
           <div className="flex items-center gap-2 bg-[#ffffff] transition-all duration-200 border border-[#E0E0E0] rounded-[8px] px-[14px] py-[10px] focus-within:border-[#297BBF] focus-within:shadow-[0_0_0_3px_rgba(41,123,191,0.15)]">
             <Search size={18} color="#297BBF" className="flex-shrink-0" />
             <input
@@ -55,13 +63,43 @@ export default function SearchPage() {
               <div className="w-4 h-4 border-2 rounded-full animate-spin flex-shrink-0 border-[#E0E0E0] border-t-[#297BBF]" />
             )}
           </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="flex-1 text-[12px] text-[#666666]">
+              Dari tanggal
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="mt-1 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[10px] py-[9px] text-[13px] text-[#1a1a1a] outline-none focus:border-[#297BBF]"
+              />
+            </label>
+            <label className="flex-1 text-[12px] text-[#666666]">
+              Sampai tanggal
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="mt-1 w-full rounded-[8px] border border-[#E0E0E0] bg-white px-[10px] py-[9px] text-[13px] text-[#1a1a1a] outline-none focus:border-[#297BBF]"
+              />
+            </label>
+            {(dateFrom || dateTo) && (
+              <button
+                type="button"
+                onClick={() => { setDateFrom(''); setDateTo(''); }}
+                className="h-[38px] rounded-[8px] border border-[#E0E0E0] px-[12px] text-[12px] text-[#666666] hover:bg-[#F8F9FB]"
+              >
+                Reset tanggal
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Results */}
-        {!debouncedKw ? (
+        {!debouncedKw && !dateFrom && !dateTo ? (
           <div className="text-center py-[60px] px-[24px]">
             <Search size={48} color="#E0E0E0" className="mx-auto mb-4" />
-            <p className="text-[14px] text-[#666666]">Masukkan kata kunci untuk mencari dokumen</p>
+            <p className="text-[14px] text-[#666666]">Masukkan kata kunci atau pilih tanggal untuk mencari dokumen</p>
           </div>
         ) : isLoading ? (
           <div className="space-y-2">
@@ -73,7 +111,7 @@ export default function SearchPage() {
           <div className="text-center py-[60px] px-[24px]">
             <FileX size={48} color="#E0E0E0" className="mx-auto mb-4" />
             <p className="font-[500] text-[14px] text-[#1a1a1a]">Tidak ada dokumen ditemukan</p>
-            <p className="text-[12px] text-[#666666] mt-1">Coba kata kunci yang berbeda</p>
+            <p className="text-[12px] text-[#666666] mt-1">Coba kata kunci atau rentang tanggal yang berbeda</p>
           </div>
         ) : (
           <div className="space-y-2">

@@ -100,15 +100,44 @@ const deleteFile = async (req, res) => {
 
 const searchFiles = async (req, res) => {
   try {
-    const { q } = req.query;
-    if (!q || !q.trim()) return res.status(200).json({ success: true, data: [] });
+    const { q, dari, sampai } = req.query;
+    const keyword = typeof q === 'string' ? q.trim() : '';
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+    const isValidDate = (value) => {
+      if (!value || !datePattern.test(value)) return false;
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+    };
 
-    const { data: files, error } = await supabase.from('files')
+    if (!keyword && !dari && !sampai) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    if ((dari && !isValidDate(dari)) || (sampai && !isValidDate(sampai))) {
+      return res.status(400).json({ success: false, message: 'Format tanggal harus YYYY-MM-DD.' });
+    }
+
+    if (dari && sampai && dari > sampai) {
+      return res.status(400).json({ success: false, message: 'Tanggal mulai tidak boleh setelah tanggal akhir.' });
+    }
+
+    let query = supabase.from('files')
       .select('*, pengunggah:users!diunggah_oleh(id,nama,email), folder:folders!folder_id(id,nama)')
-      .is('dihapus_pada', null).ilike('nama_asli', `%${q.trim()}%`).order('diunggah_pada', { ascending: false });
+      .is('dihapus_pada', null);
+
+    if (keyword) query = query.ilike('nama_asli', `%${keyword}%`);
+    if (dari) query = query.gte('diunggah_pada', `${dari}T00:00:00.000Z`);
+    if (sampai) query = query.lte('diunggah_pada', `${sampai}T23:59:59.999Z`);
+
+    const { data: files, error } = await query.order('diunggah_pada', { ascending: false });
     if (error) return res.status(500).json({ success: false, message: 'Gagal mencari file.' });
 
-    await supabase.from('activity_logs').insert({ user_id: req.user.id, aksi: 'cari_file', keterangan: `Mencari: ${q.trim()}`, ip_address: req.ip });
+    const criteria = [
+      keyword && `kata kunci "${keyword}"`,
+      dari && `dari ${dari}`,
+      sampai && `sampai ${sampai}`,
+    ].filter(Boolean).join(', ');
+    await supabase.from('activity_logs').insert({ user_id: req.user.id, aksi: 'cari_file', keterangan: `Mencari: ${criteria}`, ip_address: req.ip });
     return res.status(200).json({ success: true, data: files });
   } catch (error) { console.error('searchFiles error:', error); return res.status(500).json({ success: false, message: 'Terjadi kesalahan pada server.' }); }
 };

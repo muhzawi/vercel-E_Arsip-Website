@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api/axios';
+import supabase from '../config/supabase';
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 
 export default function ResetPasswordPage() {
@@ -10,38 +10,58 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [token, setToken] = useState('');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Parse access_token dari fragment URL (karena Supabase GoTrue mengirimkannya di hash)
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    
-    if (accessToken) {
-      setToken(accessToken);
-    } else {
-      setError('Token reset password tidak ditemukan di URL. Silakan minta tautan reset yang baru dari halaman Lupa Password.');
-    }
+    const initializeRecoverySession = async () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const code = new URLSearchParams(window.location.search).get('code');
+      let authError = null;
+
+      if (accessToken && refreshToken) {
+        ({ error: authError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }));
+      } else if (code) {
+        ({ error: authError } = await supabase.auth.exchangeCodeForSession(code));
+      } else {
+        authError = new Error('Token reset password tidak ditemukan di URL.');
+      }
+
+      if (authError) {
+        setError('Tautan reset password tidak valid atau sudah kedaluwarsa. Silakan minta tautan baru.');
+        return;
+      }
+
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setReady(true);
+    };
+
+    initializeRecoverySession();
   }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!token) {
-      setError('Token tidak tersedia. Silakan gunakan link terbaru dari email Anda.');
+    if (!ready) {
+      setError('Sesi reset password tidak tersedia. Silakan gunakan link terbaru dari email Anda.');
       return;
     }
+
     setError('');
     setMessage('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/reset-password', 
-        { new_password: password }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage(res.data.message + ' Mengalihkan ke halaman login...');
-      setTimeout(() => navigate('/login'), 3000);
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+
+      await supabase.auth.signOut();
+      setMessage('Password berhasil diubah. Mengalihkan ke halaman login...');
+      setTimeout(() => navigate('/login'), 2000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Gagal mengubah password.');
+      setError(err.message || 'Gagal mengubah password.');
     } finally {
       setLoading(false);
     }
@@ -74,15 +94,31 @@ export default function ResetPasswordPage() {
             <div>
               <label className="block font-[500] mb-1 text-[12px] text-[#333333]">Password Baru</label>
               <div className="relative">
-                <input type={showPw ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} placeholder="••••••••" className="input-field pr-10" disabled={!token} />
-                <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#666666] hover:text-[#333333] transition-colors p-1" disabled={!token}>
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="********"
+                  className="input-field pr-10"
+                  disabled={!ready}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#666666] hover:text-[#333333] transition-colors p-1"
+                  disabled={!ready}
+                >
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
               <p className="text-[11px] text-[#999999] mt-1">Minimal 6 karakter.</p>
             </div>
-            
-            <button type="submit" disabled={loading || !token}
+
+            <button
+              type="submit"
+              disabled={loading || !ready}
               className="w-full text-[#ffffff] font-[500] flex items-center justify-center gap-2 transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed bg-[#297BBF] hover:bg-[#1a6aad] p-[11px] rounded-[6px] text-[14px] shadow-sm"
             >
               {loading && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
