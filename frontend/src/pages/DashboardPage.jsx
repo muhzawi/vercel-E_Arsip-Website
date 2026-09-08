@@ -116,7 +116,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-[18px] font-[600] text-[#1a1a1a]">Selamat datang, {user?.nama}!</h1>
-          <p className="text-[12px] text-[#666666] mt-[2px]">Cabang Dinas Pendidikan Wilayah 1 — Sistem E-Arsip</p>
+          <p className="text-[12px] text-[#666666] mt-[2px]">Dinas Pendidikan Wilayah 1 — Sistem E-Arsip</p>
         </div>
 
         {/* 3 Kartu statistik */}
