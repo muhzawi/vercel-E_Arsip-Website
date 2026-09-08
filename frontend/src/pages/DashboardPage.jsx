@@ -107,6 +107,8 @@ export default function DashboardPage() {
 
   const folders = foldersData || [];
   const rootFolders = folders.filter(f => !f.parent_id);
+  const monthlyUploads = statsData?.monthlyUploads || [];
+  const maxMonthlyUploads = Math.max(...monthlyUploads.map(month => month.total), 1);
 
   return (
     <Layout>
@@ -165,6 +167,39 @@ export default function DashboardPage() {
             </div>
           </div>
 
+        </div>
+
+        {/* Grafik analitik */}
+        <div className="bg-white border border-[#E0E0E0] rounded-lg p-5 mb-8 shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <div>
+              <h2 className="text-[15px] font-[600] text-[#1a1a1a]">Analitik Pengarsipan</h2>
+              <p className="text-[12px] text-[#666666] mt-1">Jumlah file aktif yang diunggah dalam 6 bulan terakhir</p>
+            </div>
+            <FileText size={18} className="text-[#297BBF] flex-shrink-0" />
+          </div>
+
+          {monthlyUploads.length === 0 ? (
+            <div className="h-[190px] flex items-center justify-center text-[13px] text-[#666666]">
+              Belum ada data analitik.
+            </div>
+          ) : (
+            <div className="h-[190px] flex items-end gap-2 sm:gap-4">
+              {monthlyUploads.map((month) => (
+                <div key={month.key} className="flex-1 h-full flex flex-col items-center justify-end gap-2">
+                  <span className="text-[11px] font-[600] text-[#297BBF]">{month.total}</span>
+                  <div className="w-full max-w-[54px] h-[130px] flex items-end rounded-t-md bg-[#EBF4FC]">
+                    <div
+                      className="w-full rounded-t-md bg-[#297BBF] transition-all duration-500"
+                      style={{ height: `${Math.max((month.total / maxMonthlyUploads) * 100, month.total ? 6 : 0)}%` }}
+                      title={`${month.label}: ${month.total} file`}
+                    />
+                  </div>
+                  <span className="text-[11px] text-[#666666] capitalize">{month.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Section folder */}

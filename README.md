@@ -214,6 +214,7 @@ SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGci...   # Service Role Key (BUKAN anon key!)
 JWT_SECRET=isi_random_string_minimal_32_karakter
 JWT_EXPIRES_IN=8h
+FRONTEND_URL=http://localhost:5173
 ```
 
 Cara mendapat nilai Supabase:

@@ -239,9 +239,16 @@ const forgotPassword = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ success: false, message: 'Email wajib diisi.' });
 
-    const redirectUrl = process.env.FRONTEND_URL 
-      ? `${process.env.FRONTEND_URL}/reset-password`
-      : 'http://localhost:5173/reset-password';
+    const frontendUrl = process.env.FRONTEND_URL?.replace(/\/+$/, '');
+    if (process.env.NODE_ENV === 'production' && !frontendUrl) {
+      console.error('Forgot password error: FRONTEND_URL belum dikonfigurasi di production.');
+      return res.status(500).json({
+        success: false,
+        message: 'Konfigurasi URL aplikasi belum lengkap. Silakan hubungi administrator.',
+      });
+    }
+
+    const redirectUrl = `${frontendUrl || 'http://localhost:5173'}/reset-password`;
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
       redirectTo: redirectUrl,
