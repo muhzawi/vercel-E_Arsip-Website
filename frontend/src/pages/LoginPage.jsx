@@ -44,7 +44,7 @@ export default function LoginPage() {
               />
             </div>
             <h1 className="font-[600] text-[22px] text-[#1a1a1a]">E-Arsip</h1>
-            <p className="text-[13px] text-[#666666] mt-[2px]">Dinas Pendidikan</p>
+            <p className="text-[13px] text-[#666666] mt-[2px]">Dinas Pendidikan Wilayah 1</p>
             <p className="text-[11px] text-[#999999] mt-[4px]">Sistem Pengarsipan Dokumen Digital</p>
           </div>
 
@@ -85,8 +85,8 @@ export default function LoginPage() {
               Belum punya akun?{' '}
               <Link to="/register" className="font-[500] text-[#297BBF] hover:text-[#1a6aad] hover:underline transition-colors duration-300">Daftar di sini</Link>
             </p>
-            <p className="text-[10px] text-[#999999] uppercase tracking-wider font-medium">
-              © 2026 Dinas Pendidikan Kota Medan
+            <p className="text-[10px] text-[#999999] uppercase tracking-wider font-medium text-center">
+              © 2026 Dinas Pendidikan Wilayah 1 . All rights reserved.
             </p>
           </div>
         </div>

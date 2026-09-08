@@ -81,7 +81,7 @@ export default function Sidebar({ onClose }) {
           </div>
           <div>
             <h1 className="text-white font-[600] text-[14px] leading-none mb-[2px]">E-Arsip</h1>
-            <p className="text-white/50 font-normal text-[10px] leading-none">Dinas Pendidikan</p>
+            <p className="text-white/50 font-normal text-[10px] leading-none">Dinas Pendidikan Wilayah 1</p>
           </div>
         </div>
         {onClose && (
